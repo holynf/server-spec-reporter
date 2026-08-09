@@ -54,6 +54,11 @@
             (
               docker_exists and
               kubelet_container.rc == 0
+            ) or
+            rke2_binary.stat.exists and
+            (
+              'rke2-server.service' in ansible_facts.services or
+              'rke2-agent.service' in ansible_facts.services
             )
         })
       }}
@@ -100,3 +105,7 @@
   when:
     - kubernetes.installed
     - kubernetes.distribution == "Not Installed"
+
+- name: test
+  debug:
+    var: kubernetes

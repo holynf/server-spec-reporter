@@ -1,38 +1,69 @@
----
+# ============================================================================
+# RKE2 version
+# ============================================================================
+
 - name: Get RKE2 version
   ansible.builtin.command: /usr/local/bin/rke2 --version
-  register: version_cmd
+  register: rke2_version_cmd
   changed_when: false
+  failed_when: false
   when: kubernetes.distribution == "RKE2"
+
+
+# ============================================================================
+# RKE1 version
+# ============================================================================
 
 - name: Check if kubelet container exists
   ansible.builtin.command: docker inspect kubelet
   register: kubelet_container
   failed_when: false
   changed_when: false
-  when: kubernetes.distribution == "RKE1"
+  when:
+    - kubernetes.distribution == "RKE1"
+
 
 - name: Get Kubernetes version from kubelet container
   ansible.builtin.command: docker exec kubelet kubelet --version
-  register: version_cmd
+  register: rke1_version_cmd
   changed_when: false
+  failed_when: false
   when:
     - kubernetes.distribution == "RKE1"
-    - kubelet_container.rc == 0
+    - kubelet_container.rc | default(1) == 0
 
-- name: Store Kubernetes version
+
+# ============================================================================
+# Store Kubernetes version
+# ============================================================================
+
+- name: Store RKE2 Kubernetes version
   ansible.builtin.set_fact:
     kubernetes: >-
       {{
         kubernetes | combine({
-          'raw_version': version_cmd.stdout,
           'version': (
-            version_cmd.stdout
-            | regex_search('v[0-9]+\.[0-9]+\.[0-9]+(?:\+rke2r[0-9]+)?')
+            rke2_version_cmd.stdout
+            | regex_search('rke2 version (v[^ ]+)', '\1')
+            | first
             | default('Unknown')
-          )
+          ),
+          'raw_version': rke2_version_cmd.stdout | default('')
         })
       }}
   when:
-    - version_cmd is defined
-    - version_cmd.rc == 0
+    - kubernetes.distribution == "RKE2"
+    - rke2_version_cmd.rc | default(1) == 0
+
+- name: Store RKE1 Kubernetes version
+  ansible.builtin.set_fact:
+    kubernetes: >-
+      {{
+        kubernetes | combine({
+          'version': rke1_version_cmd.stdout | default('Unknown'),
+          'raw_version': rke1_version_cmd.stdout | default('')
+        })
+      }}
+  when:
+    - kubernetes.distribution == "RKE1"
+    - rke1_version_cmd.rc | default(1) == 0
